@@ -7,13 +7,13 @@ import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from torch.utils.data import DataLoader
-from Loss import ContrastiveLoss  
-from moco_model_encoder_resnet import MoCoV2Encoder  
+from moco_darya.training.Loss import ContrastiveLoss  
+from moco_darya.models.moco_model_encoder_resnet import MoCoV2Encoder  
 import time
 import math
 import glob
 import json
-from dataloader_superpixel2 import SuperpixelMoCoDataset, get_moco_v2_augmentations
+from moco_darya.training.dataloader_superpixel2 import SuperpixelMoCoDataset, get_moco_v2_augmentations
 
 
 

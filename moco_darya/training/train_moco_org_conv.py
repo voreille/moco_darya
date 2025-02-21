@@ -7,12 +7,12 @@ import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from torch.utils.data import DataLoader
-from Loss import MocoConvnetLoss  
-from moco_model_encoder_conv import MoCoV2ConvNeXt 
+from moco_darya.training.Loss import MocoConvnetLoss  
+from moco_darya.models.moco_model_encoder_conv import MoCoV2ConvNeXt 
 import time
 import math
 import glob
-from moco_data_loader import MoCoTileDataset, TwoCropsTransform, get_moco_v2_augmentations
+from moco_darya.training.moco_data_loader import MoCoTileDataset, TwoCropsTransform, get_moco_v2_augmentations
 
 
 

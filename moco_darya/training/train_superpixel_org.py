@@ -23,17 +23,21 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 epochs = 100
-alpha = 0.5
+alpha = 1.0
 resnet_type = "resnet50"
-experiment_name = "superpixels_{resnet_type}__alpha_{alpha}"
+experiment_name = f"superpixels_{resnet_type}__alpha_{alpha}"
+gpu_id = 0
 
 project_dir = Path(__file__).parents[2].resolve()
 
 JSON_PATH = "/mnt/nas7/data/Personal/Valentin/histopath/tiles_superpixels_with_overlap/superpixel_mapping_train.json"
 MODEL_SAVE_DIR = f"/mnt/nas7/data/Personal/Darya/saved_models/{experiment_name}"
 CHECKPOINT_SAVE_DIR = f"/mnt/nas7/data/Personal/Darya/Checkpoints/{experiment_name}"
-PLOT_SAVE_DIR = project_dir / f"reports/{experiment_name}/Loss_curve_plot"
-CSV_SAVE_PATH = project_dir / f"reports/{experiment_name}/Superpixel_org.csv"
+
+reports_dir = project_dir / f"reports/{experiment_name}"
+reports_dir.mkdir(exist_ok=True)
+PLOT_SAVE_DIR = reports_dir / "Loss_curve_plot"
+CSV_SAVE_PATH = reports_dir / "Superpixel_org.csv"
 
 # Ensure checkpoint directory exists
 os.makedirs(CHECKPOINT_SAVE_DIR, exist_ok=True)
@@ -51,7 +55,7 @@ if not os.path.exists(CSV_SAVE_PATH):
 torch.cuda.empty_cache()
 
 # Define the device (GPU if available, otherwise CPU)
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
 logger.info(f"Using device: {device}")
 
 
