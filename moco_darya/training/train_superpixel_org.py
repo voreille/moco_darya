@@ -18,9 +18,18 @@ from moco_darya.training.Loss import ContrastiveLoss
 from moco_darya.models.moco_model_encoder_superpixel import MoCoV2Encoder
 from moco_darya.training.dataloader_superpixel2 import SuperpixelMoCoDatasetNeighbor, get_moco_v2_augmentations
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Reset logging to avoid conflicts with previous configurations
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
+
+# Configure logging with timestamp, level, and message
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S")
+
 logger = logging.getLogger(__name__)
+
 
 epochs = 100
 alpha = 1.0
