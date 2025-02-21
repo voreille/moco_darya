@@ -30,12 +30,14 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-
 epochs = 100
 alpha = 1.0
 resnet_type = "resnet50"
 experiment_name = f"superpixels_{resnet_type}__alpha_{alpha}"
 gpu_id = 0
+num_workers = 32
+
+n_batches_to_compute_time = 20
 
 project_dir = Path(__file__).parents[2].resolve()
 
@@ -184,8 +186,9 @@ def train_moco(json_path,
     train_loader = DataLoader(train_dataset,
                               batch_size=batch_size,
                               shuffle=True,
-                              num_workers=28,
+                              num_workers=num_workers,
                               pin_memory=True,
+                              persistent_workers=True,
                               prefetch_factor=4)
 
     logger.info(
@@ -260,6 +263,7 @@ def train_moco(json_path,
 
         data_start_time = time.perf_counter()
         epoch_start_time = time.perf_counter()
+        each_n_batch_start_time = time.perf_counter()
 
         for batch_idx, (images_q, images_k1,
                         images_k2) in enumerate(train_loader):
@@ -306,6 +310,14 @@ def train_moco(json_path,
             logger.info(
                 f"Loss: {loss.item():.4f}, Tile Loss: {loss_tile.item():.4f}, Neighbor Loss: {loss_neighbor.item():.4f}"
             )
+            if (batch_idx + 1) % n_batches_to_compute_time == 0:
+                elapsed_time_average = time.perf_counter(
+                ) - each_n_batch_start_time
+                logger.info(
+                    f"AVERAGE TIME for batches {batch_idx + 1 - n_batches_to_compute_time} "
+                    f"to {batch_idx + 1}: {elapsed_time_average/n_batches_to_compute_time:.6f} [s/it]"
+                )
+                each_n_batch_start_time = time.perf_counter()
 
             # Start timing for the next batch loading
             data_start_time = time.perf_counter()
