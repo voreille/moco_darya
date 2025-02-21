@@ -112,3 +112,40 @@ class SuperpixelMoCoDatasetNeighbor(Dataset):
             image_2 = self.transform(image_2)
 
         return image_1_1, image_1_2, image_2        
+
+
+class SuperpixelMoCoDatasetNeighborAblation(Dataset):
+    def __init__(self, mapping_json, transform=None):
+        with open(mapping_json, "r") as f:
+            self.superpixel_list = json.load(f)
+
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.superpixel_list)
+
+    def _load_image(self, path):
+        """Loads an image efficiently using OpenCV."""
+        # img = cv2.imread(path)  # OpenCV loads as BGR
+        # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # Convert to RGB
+        with open(path, "rb") as f:
+            img = pyspng.load(f.read())
+        img = Image.fromarray(img).convert("RGB")  # Convert to PIL
+        return img
+
+    def __getitem__(self, idx):
+        superpixel_data = self.superpixel_list[idx]
+        tile_paths = superpixel_data["tile_paths"]
+
+        tile_path_1 = random.choice(tile_paths)
+
+        image_1 = self._load_image(tile_path_1)
+
+        if self.transform:
+            image_1_1 = self.transform(image_1)
+            image_1_2 = self.transform(image_1)
+            image_2 = self.transform(image_1)
+
+        return image_1_1, image_1_2, image_2        
+
+
