@@ -7,13 +7,12 @@ import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from torch.utils.data import DataLoader
-from Loss import ContrastiveLoss  
-from moco_model_encoder_superpixel import MoCoV2Encoder  
+from moco_darya.training.Loss import ContrastiveLoss  
+from moco_darya.models.moco_model_encoder_resnet import MoCoV2Encoder  
 import time
 import math
 import glob
-import json
-from dataloader_superpixel2 import SuperpixelMoCoDatasetNeighbor, get_moco_v2_augmentations
+from moco_darya.training.moco_data_loader import MoCoTileDataset, TwoCropsTransform, get_moco_v2_augmentations
 
 
 
@@ -21,11 +20,12 @@ from dataloader_superpixel2 import SuperpixelMoCoDatasetNeighbor, get_moco_v2_au
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-JSON_PATH = "/home/valentin/workspaces/histolung/data/interim/tiles_superpixels_with_overlap/superpixel_mapping_train.json"
-MODEL_SAVE_DIR = "/mnt/nas7/data/Personal/Darya/saved_models/superpixel_org"
-CHECKPOINT_SAVE_DIR = "/mnt/nas7/data/Personal/Darya/Checkpoints/superpixel_org" 
+# Directories for saving models, plots, and CSV results
+#MODEL_SAVE_DIR = "/home/darya/Histo_pipeline/Moco_Original_models"
+SECOND_SAVE_DIR = "/mnt/nas7/data/Personal/Darya/saved_models/moco_50_256"
+CHECKPOINT_SAVE_DIR = "/mnt/nas7/data/Personal/Darya/Checkpoints/moco_50_256" 
 PLOT_SAVE_DIR = "/home/darya/Histo_pipeline/Loss_curve_plot"
-CSV_SAVE_PATH = "/home/darya/Histo_pipeline/Superpixel_org.csv"
+CSV_SAVE_PATH = "/home/darya/Histo_pipeline/MoCo_org.csv"
 
 # Ensure checkpoint directory exists
 os.makedirs(CHECKPOINT_SAVE_DIR, exist_ok=True)
@@ -35,7 +35,7 @@ if not os.path.exists(CSV_SAVE_PATH):
     with open(CSV_SAVE_PATH, "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow([
-            "Batch Size", "Temperature", "Average Training Loss", 
+            "Epoch", "Batch Size", "ResNet Type", "Average Training Loss", 
             "Training Time", "Metric Type", "Number of Epochs"
         ])
     logger.info(f"CSV file created at {CSV_SAVE_PATH}")
@@ -44,7 +44,7 @@ if not os.path.exists(CSV_SAVE_PATH):
 torch.cuda.empty_cache()
 
 # Define the device (GPU if available, otherwise CPU)
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 logger.info(f"Using device: {device}")
 
 def update_template_csv(csv_path, batch_size, temperature, avg_loss, train_time, num_epochs):
@@ -96,39 +96,35 @@ def save_checkpoint(epoch, model, optimizer, scaler, base_lr, checkpoint_path, b
     logger.info(f"Checkpoint saved: {checkpoint_path}")
 
     if best:
-        best_path = os.path.join(CHECKPOINT_SAVE_DIR, "superpixel_org_best_model.pth")
+        best_path = os.path.join(CHECKPOINT_SAVE_DIR, "moco_best_model_256_101.pth")
         torch.save(checkpoint, best_path)
         logger.info(f"New best model saved: {best_path}")
 
 def get_latest_checkpoint(checkpoint_dir):
-    checkpoints = sorted(glob.glob(os.path.join(checkpoint_dir, "superpixel_org_*.pth")), key=os.path.getmtime, reverse=True)
+    checkpoints = sorted(glob.glob(os.path.join(checkpoint_dir, "moco_org_*.pth")), key=os.path.getmtime, reverse=True)
     return checkpoints[0] if checkpoints else None  
 
-def load_existing_losses(plot_save_dir):
+def load_existing_losses(plot_save_dir, batch_size, resnet_type):
     """Load previous loss values if they exist."""
-    loss_file = os.path.join(plot_save_dir, f"superpixel_org_loss_curve.txt")
+    loss_file = os.path.join(plot_save_dir, f"MOCO_org_loss_curve_{batch_size}_{resnet_type}.txt")
     if os.path.exists(loss_file):
         with open(loss_file, "r") as f:
             losses = [float(line.strip()) for line in f.readlines()]
         return losses
     return []
 
-def save_losses(losses, plot_save_dir):
+def save_losses(losses, plot_save_dir, batch_size, resnet_type):
     """Save the loss values to a file."""
-    os.makedirs(plot_save_dir, exist_ok=True)  # Ensure the directory exists
-    
-    loss_file = os.path.join(plot_save_dir, "superpixel_org_loss_curve.txt")
-    
+    loss_file = os.path.join(plot_save_dir, f"MOCO_org_loss_curve_{batch_size}_{resnet_type}.txt")
     with open(loss_file, "w") as f:
         for loss in losses:
-            f.write(f"{loss}\n")    
+            f.write(f"{loss}\n")       
 
 def train_moco(
-    json_path,
+    tile_csv_path,
     model=None,
     batch_size=128,
     epochs=100,
-    alpha=0.5,
     learning_rate=0.003,
     temperature=0.07,
     csv_path=CSV_SAVE_PATH,
@@ -136,15 +132,15 @@ def train_moco(
     resnet_type=None,
     resume_checkpoint=None
 ):
-    logger.info("Starting MoCo training with Superpixel-based DataLoader...")
+    logger.info("Starting MoCo training with Mixed Precision")
     start_time = datetime.now()
 
     
     # DataLoader using MoCo-style augmentations
     logger.info("Initializing DataLoader...")
-    train_transform = get_moco_v2_augmentations()
-    train_dataset = SuperpixelMoCoDatasetNeighbor(json_path, transform=train_transform)
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=28, pin_memory=True, prefetch_factor=4)
+    train_transform = TwoCropsTransform(get_moco_v2_augmentations())
+    train_dataset = MoCoTileDataset(csv_path=tile_csv_path, transform=train_transform)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=12, pin_memory=True)
 
     logger.info(f"Training DataLoader loaded with {len(train_loader)} batches.")
 
@@ -162,14 +158,14 @@ def train_moco(
 
     # Find the latest checkpoint if resume_checkpoint is True
     if resume_checkpoint is True:
-        resume_checkpoint = get_latest_checkpoint(MODEL_SAVE_DIR)
+        resume_checkpoint = get_latest_checkpoint(SECOND_SAVE_DIR)
 
 
     start_epoch = 0
     best_loss = float("inf")
 
     # Load existing loss values
-    epoch_losses = load_existing_losses(PLOT_SAVE_DIR)
+    epoch_losses = load_existing_losses(PLOT_SAVE_DIR, batch_size, resnet_type)
 
     if resume_checkpoint and os.path.exists(resume_checkpoint):
         logger.info(f"Loading checkpoint: {resume_checkpoint}")
@@ -213,9 +209,8 @@ def train_moco(
         logger.info(f"Learning rate adjusted to: {lr:.6f}")
 
         data_start_time = time.perf_counter()
-        epoch_start_time = time.perf_counter()
 
-        for batch_idx, (images_q, images_k1, images_k2) in enumerate(train_loader):
+        for batch_idx, (images_q, images_k) in enumerate(train_loader):
             # Measure data loading time
             data_end_time = time.perf_counter()
             data_loading_time = data_end_time - data_start_time
@@ -223,15 +218,12 @@ def train_moco(
             batch_start_time = time.perf_counter()
     
             images_q = images_q.to(device, non_blocking=True)
-            images_k1 = images_k1.to(device, non_blocking=True)
-            images_k2 = images_k2.to(device, non_blocking=True)
+            images_k = images_k.to(device, non_blocking=True)
 
             # Forward pass
             with torch.amp.autocast(device_type="cuda"):
-                q, k1, k2 = moco_model(images_q, images_k1, images_k2)  
-                loss_tile = criterion(q, k1, model.queue)
-                loss_neighbor = criterion(q, k2, model.queue)
-                loss = alpha*loss_tile + (1 - alpha)*loss_neighbor
+                q, k = model(images_q, images_k)  
+                loss = criterion(q, k, model.queue)
                 logger.info("Loss Calculated")
 
             # Backward pass with scaler
@@ -241,7 +233,7 @@ def train_moco(
             scaler.update()
 
             # Update queue
-            moco_model.update_queue(k1, k2)
+            model.update_queue(k)
 
             batch_end_time = time.perf_counter()  # End batch processing time
             batch_time = batch_end_time - batch_start_time
@@ -251,30 +243,31 @@ def train_moco(
             num_batches += 1
 
             logger.info(f"Batch {batch_idx+1}/{len(train_loader)} -> Data Loading Time: {data_loading_time:.6f}s, Batch Processing Time: {batch_time:.6f}s")
-            logger.info(f"Epoch {epoch + 1}/{epochs}, Batch {batch_idx + 1}/{len(train_loader)}, Average time per batch: {(time.perf_counter() - epoch_start_time)/(batch_idx+1):.6f}s")
-            logger.info(f"Loss: {loss.item():.4f}, Tile Loss: {loss_tile.item():.4f}, Neighbor Loss: {loss_neighbor.item():.4f}")
+            logger.info(f"Epoch {epoch + 1}/{epochs}, Batch {batch_idx + 1}/{len(train_loader)}, Loss: {loss.item():.4f}")
             
             # Start timing for the next batch loading
             data_start_time = time.perf_counter()
 
             #if batch_idx + 1 == 20:
-             #  break
+             #   break
 
+        avg_batch_time = sum(batch_time)/len(batch_time)
         avg_epoch_loss = running_loss / num_batches if num_batches > 0 else float("inf")
         epoch_losses.append(avg_epoch_loss)
         writer.add_scalar("Loss/train", avg_epoch_loss, epoch)
+        logger.info(f"Epoch {epoch + 1} completed -> Avg Data Loading Time: {avg_data_loading_time:.6f}s, Avg Batch Time: {avg_batch_time:.6f}s, Loss: {avg_epoch_loss:.4f}")
         
        
 
         # Save checkpoint
-        checkpoint_path = os.path.join(MODEL_SAVE_DIR, f"superpixel_org_{epoch}.pth")
+        checkpoint_path = os.path.join(SECOND_SAVE_DIR, f"moco_org_{batch_size}_{resnet_type}_{epoch}.pth")
         save_checkpoint(epoch, model, optimizer, scaler, learning_rate, checkpoint_path)
 
-        save_losses(epoch_losses, PLOT_SAVE_DIR)
+        save_losses(epoch_losses, PLOT_SAVE_DIR, batch_size, resnet_type)
 
         # Save every 5 epochs and best model
         if (epoch + 1) % 5 == 0:
-            checkpoint_path = os.path.join(CHECKPOINT_SAVE_DIR, f"superpixel_org_checkpoint_epoch_{epoch+1}.pth")
+            checkpoint_path = os.path.join(CHECKPOINT_SAVE_DIR, f"moco_checkpoint_epoch_{epoch+1}_256_50.pth")
             save_checkpoint(epoch, model, optimizer, scaler, learning_rate, checkpoint_path)
 
             if avg_epoch_loss < best_loss:
@@ -293,7 +286,7 @@ def train_moco(
 
     # Plot and save training loss curve
     logger.info("Plotting and saving training loss curve...")
-    train_plot_path = os.path.join(PLOT_SAVE_DIR, f"Superpixel_org_loss_curve.png")
+    train_plot_path = os.path.join(PLOT_SAVE_DIR, f"MOCO_org_loss_curve_256_50.png")
     plt.figure(figsize=(10, 6))
     plt.plot(range(1, len(epoch_losses) + 1), epoch_losses, marker="o", label="Training Loss")
     plt.xlabel("Epochs")
@@ -311,14 +304,19 @@ if __name__ == "__main__":
     resnet_type = "resnet50"
     moco_model = MoCoV2Encoder(base_encoder=resnet_type, output_dim=128, queue_size=65536)  # Reduce from 65536 32768
    
+
+    # Path to tile_path.csv (contains all  train image paths)
+    tile_csv_path = "/home/darya/Histo/Histo_pipeline_csv/train_path.csv"
    
     train_moco(
-        json_path=JSON_PATH,
+        tile_csv_path=tile_csv_path,
         model=moco_model,
         batch_size=256,
-        epochs=100,
-        alpha=0.5,
+        epochs=12,
         learning_rate=0.003,
+        temperature=0.07,
+        csv_path=CSV_SAVE_PATH,
         device=device,
-        resnet_type="resnet50",
-        resume_checkpoint=False)
+        resnet_type=resnet_type,
+        resume_checkpoint=True
+    )
