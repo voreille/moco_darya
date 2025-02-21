@@ -33,8 +33,8 @@ logger = logging.getLogger(__name__)
 epochs = 100
 alpha = 0.5
 resnet_type = "resnet50"
-experiment_name = f"superpixels_{resnet_type}__alpha_{alpha}_ablation"
-gpu_id = 1
+experiment_name = f"superpixels_{resnet_type}__alpha_{alpha}__ablation"
+gpu_id = 0
 num_workers = 32
 
 n_batches_to_compute_time = 20
@@ -47,11 +47,14 @@ CHECKPOINT_SAVE_DIR = f"/mnt/nas7/data/Personal/Darya/Checkpoints/{experiment_na
 
 reports_dir = project_dir / f"reports/{experiment_name}"
 reports_dir.mkdir(exist_ok=True)
-PLOT_SAVE_DIR = reports_dir / "Loss_curve_plot"
-CSV_SAVE_PATH = reports_dir / "Superpixel_org.csv"
+
+PLOT_SAVE_DIR = str(reports_dir / "Loss_curve_plot")
+CSV_SAVE_PATH = str(reports_dir / "Superpixel_org.csv")
 
 # Ensure checkpoint directory exists
 os.makedirs(CHECKPOINT_SAVE_DIR, exist_ok=True)
+os.makedirs(MODEL_SAVE_DIR, exist_ok=True)
+os.makedirs(PLOT_SAVE_DIR, exist_ok=True)
 
 # Create the CSV file if it doesn't exist
 if not os.path.exists(CSV_SAVE_PATH):
@@ -181,8 +184,8 @@ def train_moco(json_path,
     # DataLoader using MoCo-style augmentations
     logger.info("Initializing DataLoader...")
     train_transform = get_moco_v2_augmentations()
-    train_dataset = SuperpixelMoCoDatasetNeighborAblation(json_path,
-                                                  transform=train_transform)
+    train_dataset = SuperpixelMoCoDatasetNeighborAblation(
+        json_path, transform=train_transform)
     train_loader = DataLoader(train_dataset,
                               batch_size=batch_size,
                               shuffle=True,
@@ -322,8 +325,8 @@ def train_moco(json_path,
             # Start timing for the next batch loading
             data_start_time = time.perf_counter()
 
-            #if batch_idx + 1 == 20:
-            #  break
+            # if batch_idx + 1 == 20:
+            #     break
 
         avg_epoch_loss = running_loss / num_batches if num_batches > 0 else float(
             "inf")

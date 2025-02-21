@@ -47,11 +47,14 @@ CHECKPOINT_SAVE_DIR = f"/mnt/nas7/data/Personal/Darya/Checkpoints/{experiment_na
 
 reports_dir = project_dir / f"reports/{experiment_name}"
 reports_dir.mkdir(exist_ok=True)
-PLOT_SAVE_DIR = reports_dir / "Loss_curve_plot"
-CSV_SAVE_PATH = reports_dir / "Superpixel_org.csv"
+
+PLOT_SAVE_DIR = str(reports_dir / "Loss_curve_plot")
+CSV_SAVE_PATH = str(reports_dir / "Superpixel_org.csv")
 
 # Ensure checkpoint directory exists
 os.makedirs(CHECKPOINT_SAVE_DIR, exist_ok=True)
+os.makedirs(MODEL_SAVE_DIR, exist_ok=True)
+os.makedirs(PLOT_SAVE_DIR, exist_ok=True)
 
 # Create the CSV file if it doesn't exist
 if not os.path.exists(CSV_SAVE_PATH):
