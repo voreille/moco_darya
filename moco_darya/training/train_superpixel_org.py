@@ -39,6 +39,8 @@ num_workers = 32
 
 n_batches_to_compute_time = 20
 
+resume_checkpoint = True
+
 project_dir = Path(__file__).parents[2].resolve()
 
 JSON_PATH = "/mnt/nas7/data/Personal/Valentin/histopath/tiles_superpixels_with_overlap/superpixel_mapping_train.json"
@@ -400,4 +402,4 @@ if __name__ == "__main__":
                learning_rate=0.003,
                device=device,
                resnet_type=resnet_type,
-               resume_checkpoint=False)
+               resume_checkpoint=resume_checkpoint)
